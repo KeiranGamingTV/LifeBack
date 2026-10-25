@@ -22,6 +22,11 @@ import androidx.core.content.ContextCompat
 import com.keiranhaas.getyourlifeback.data.StepChallenge
 import com.keiranhaas.getyourlifeback.data.StepChallengeStore
 import com.keiranhaas.getyourlifeback.ui.LifeBackTheme
+import com.keiranhaas.getyourlifeback.widget.FocusWidget
+import androidx.glance.appwidget.updateAll
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class StepChallengeActivity : ComponentActivity(), SensorEventListener {
 
@@ -158,6 +163,10 @@ class StepChallengeActivity : ComponentActivity(), SensorEventListener {
 	    if (!StepChallengeStore.isActive(this)) return
 	
 	    challenge = StepChallengeStore.update(this, total)
+
+			CoroutineScope(Dispatchers.Default).launch {
+			    FocusWidget().updateAll(applicationContext)
+			}
 	
 	    if (challenge?.completed == true) {
 	        sensorManager.unregisterListener(this)
