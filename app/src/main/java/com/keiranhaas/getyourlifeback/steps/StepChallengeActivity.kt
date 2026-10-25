@@ -110,32 +110,28 @@ class StepChallengeActivity : ComponentActivity(), SensorEventListener {
     }
 
     private fun startChallenge() {
-        if (!hasActivityPermission()) {
-            requestActivityPermission()
-            return
-        }
-
-        val sensor = stepSensor
-        if (sensor == null) {
-            sensorUnavailable = true
-            return
-        }
-
-        // Register before establishing the baseline. The first sensor
-        // callback supplies the cumulative counter used for this challenge.
-        val registered = sensorManager.registerListener(
-            this,
-            sensor,
-            SensorManager.SENSOR_DELAY_NORMAL
-        )
-
-        if (!registered) {
-            sensorUnavailable = true
-            return
-        }
-
-        sensorReady = true
-    }
+	    if (!hasActivityPermission()) {
+	        requestActivityPermission()
+	        return
+	    }
+	
+	    val sensor = stepSensor
+	    if (sensor == null) {
+	        sensorUnavailable = true
+	        return
+	    }
+	
+	    awaitingBaseline = true
+	    challenge = null
+	
+	    if (!sensorManager.registerListener(
+	            this, sensor, SensorManager.SENSOR_DELAY_NORMAL
+	        )
+	    ) {
+	        awaitingBaseline = false
+	        sensorUnavailable = true
+	    }
+	}
 
     override fun onResume() {
         super.onResume()
@@ -148,23 +144,27 @@ class StepChallengeActivity : ComponentActivity(), SensorEventListener {
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
-        if (event?.sensor?.type != Sensor.TYPE_STEP_COUNTER) return
-
-        val total = event.values.firstOrNull()?.toInt() ?: return
-        sensorTotal = total
-
-        if (!StepChallengeStore.isActive(this)) {
-            // First reading becomes the baseline when starting a challenge.
-            StepChallengeStore.start(this, total)
-        }
-
-        challenge = StepChallengeStore.update(this, total)
-
-        if (challenge?.completed == true) {
-            sensorManager.unregisterListener(this)
-            unlockTargetApp()
-        }
-    }
+	    if (event?.sensor?.type != Sensor.TYPE_STEP_COUNTER) return
+	
+	    val total = event.values.firstOrNull()?.toInt() ?: return
+	    sensorTotal = total
+	
+	    if (awaitingBaseline) {
+	        awaitingBaseline = false
+	        StepChallengeStore.start(this, total)
+	        challenge = StepChallengeStore.update(this, total)
+	        return
+	    }
+	
+	    if (!StepChallengeStore.isActive(this)) return
+	
+	    challenge = StepChallengeStore.update(this, total)
+	
+	    if (challenge?.completed == true) {
+	        sensorManager.unregisterListener(this)
+	        unlockTargetApp()
+	    }
+	}
 
     private fun unlockTargetApp() {
         val pkg = targetPackage
