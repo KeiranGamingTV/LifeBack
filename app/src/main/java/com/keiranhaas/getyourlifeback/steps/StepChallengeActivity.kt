@@ -1,4 +1,3 @@
-
 package com.keiranhaas.getyourlifeback.steps
 
 import android.Manifest
@@ -166,31 +165,37 @@ class StepChallengeActivity : ComponentActivity(), SensorEventListener {
 	    }
 	}
 
-    private fun unlockTargetApp() {
-        val pkg = targetPackage
-        if (pkg.isNotBlank()) {
-            val allowance = getSharedPreferences(
-                "lifeback_settings", MODE_PRIVATE
-            )
-
-            allowance.edit()
-                .putLong(
-                    "allowed_until_$pkg",
-                    System.currentTimeMillis() +
-                        StepChallengeStore.target(this) * 0L +
-                        5 * 60_000L
-                )
-                .apply()
-
-            StepChallengeStore.setTarget(
-                this,
-                StepChallengeStore.target(this)
-            )
-        }
-
-        setResult(Activity.RESULT_OK)
-        finish()
-    }
+	private fun unlockTargetApp() {
+	    val pkg = targetPackage
+	
+	    if (pkg.isNotBlank()) {
+	        val allowance = getSharedPreferences(
+	            "lifeback_settings", MODE_PRIVATE
+	        )
+	
+	        val minutes = com.keiranhaas.getyourlifeback.data
+	            .LifeBackPreferences.sessionMinutes(this)
+	
+	        allowance.edit()
+	            .putLong(
+	                "allowed_until_$pkg",
+	                System.currentTimeMillis() + minutes * 60_000L
+	            )
+	            .apply()
+	
+	        com.keiranhaas.getyourlifeback.data.LifeBackPreferences
+	            .setSessionStart(this, pkg, System.currentTimeMillis())
+	
+	        val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
+	        if (launchIntent != null) {
+	            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+	            startActivity(launchIntent)
+	        }
+	    }
+	
+	    setResult(Activity.RESULT_OK)
+	    finish()
+	}
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 }
