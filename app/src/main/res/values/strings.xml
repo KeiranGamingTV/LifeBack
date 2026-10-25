@@ -1,0 +1,8 @@
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LifeBack</string>
+    <string name="accessibility_service_name">LifeBack app pause</string>
+    <string name="accessibility_service_description">Detects when a selected distracting app is opened so LifeBack can offer a mindful pause.</string>
+    <string name="focus_widget_description">LifeBack focus shortcut</string>
+</resources>
