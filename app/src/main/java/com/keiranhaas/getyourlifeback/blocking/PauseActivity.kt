@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.keiranhaas.getyourlifeback.data.LifeBackPreferences
 import com.keiranhaas.getyourlifeback.ui.LifeBackTheme
 import com.keiranhaas.getyourlifeback.steps.StepChallengeActivity
