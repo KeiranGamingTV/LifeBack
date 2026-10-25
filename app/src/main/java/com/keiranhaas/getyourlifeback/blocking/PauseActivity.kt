@@ -144,27 +144,27 @@ private fun PauseScreen(
                         }
                     }
 
-											"steps" -> {
-											    Text(
-											        "Walk ${LifeBackPreferences.sessionMinutes(context) * 20} steps " +
-											            "to earn your app time.",
-											        style = MaterialTheme.typography.bodyLarge
-											    )
-											    Spacer(Modifier.height(12.dp))
-											    Button(
-											        onClick = {
-											            context.startActivity(
-											                android.content.Intent(
-											                    context,
-											                    StepChallengeActivity::class.java
-											                ).putExtra("target_package", targetPackage)
-											            )
-											        },
-											        modifier = Modifier.fillMaxWidth()
-											    ) {
-											        Text("Start step challenge")
-											    }
-											}
+										"steps" -> {
+											  Text(
+											      "Walk ${LifeBackPreferences.sessionMinutes(context) * 20} steps " +
+											          "to earn your app time.",
+											      style = MaterialTheme.typography.bodyLarge
+											  )
+											  Spacer(Modifier.height(12.dp))
+											  Button(
+											      onClick = {
+											          context.startActivity(
+											              android.content.Intent(
+											                  context,
+											                  StepChallengeActivity::class.java
+											              ).putExtra("target_package", targetPackage)
+											          )
+											      },
+											      modifier = Modifier.fillMaxWidth()
+											  ) {
+											      Text("Start step challenge")
+											  }
+										}
 
                     else -> {
                         Text(
