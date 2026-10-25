@@ -41,6 +41,10 @@
 				    android:exported="false"
 				    android:excludeFromRecents="true" />
 
+				<activity
+				    android:name=".steps.StepChallengeActivity"
+				    android:exported="false" />
+
         <service
             android:name=".blocking.AppBlockingService"
             android:label="@string/accessibility_service_name"
