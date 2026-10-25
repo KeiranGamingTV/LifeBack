@@ -183,7 +183,7 @@ private fun PauseScreen(
 
                 Button(
                     onClick = { onContinue(LifeBackPreferences.sessionMinutes(context)) },
-                    enabled = completed,
+                    enabled = completed && intervention != "steps",
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Continue mindfully")
