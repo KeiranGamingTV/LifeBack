@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.keiranhaas.getyourlifeback.data.LifeBackPreferences
 import com.keiranhaas.getyourlifeback.ui.LifeBackTheme
+import com.keiranhaas.getyourlifeback.steps.StepChallengeActivity
 import kotlinx.coroutines.delay
 
 class PauseActivity : ComponentActivity() {
@@ -142,6 +143,28 @@ private fun PauseScreen(
                             Text(if (breathing) "Breathe…" else "Complete a breath")
                         }
                     }
+
+											"steps" -> {
+											    Text(
+											        "Walk ${LifeBackPreferences.sessionMinutes(context) * 20} steps " +
+											            "to earn your app time.",
+											        style = MaterialTheme.typography.bodyLarge
+											    )
+											    Spacer(Modifier.height(12.dp))
+											    Button(
+											        onClick = {
+											            context.startActivity(
+											                android.content.Intent(
+											                    context,
+											                    StepChallengeActivity::class.java
+											                ).putExtra("target_package", targetPackage)
+											            )
+											        },
+											        modifier = Modifier.fillMaxWidth()
+											    ) {
+											        Text("Start step challenge")
+											    }
+											}
 
                     else -> {
                         Text(
