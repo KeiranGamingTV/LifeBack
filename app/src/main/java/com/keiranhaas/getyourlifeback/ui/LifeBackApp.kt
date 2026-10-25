@@ -1,4 +1,3 @@
-
 package com.keiranhaas.getyourlifeback.ui
 
 import android.content.Intent
@@ -21,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.keiranhaas.getyourlifeback.data.LifeBackPreferences
 import com.keiranhaas.getyourlifeback.data.UsageRepository
+import com.keiranhaas.getyourlifeback.steps.StepChallengeActivity
 
 private enum class Page(val label: String) {
     HOME("Today"),
@@ -508,6 +508,16 @@ private fun FocusScreen(modifier: Modifier = Modifier) {
                 },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Begin focus") }
+						OutlinedButton(
+						    onClick = {
+						        context.startActivity(
+						            Intent(context, StepChallengeActivity::class.java)
+						        )
+						    },
+						    modifier = Modifier.fillMaxWidth()
+						) {
+						    Text("Start step challenge")
+						}
         }
         Text(
             "This is an in-app focus timer. Background completion notifications " +
