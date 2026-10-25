@@ -34,6 +34,7 @@ class StepChallengeActivity : ComponentActivity(), SensorEventListener {
     private var permissionMissing by mutableStateOf(false)
     private var sensorTotal by mutableIntStateOf(0)
     private var challenge by mutableStateOf<StepChallenge?>(null)
+		private var awaitingBaseline = false
 
     private val targetPackage: String
         get() = intent.getStringExtra("target_package").orEmpty()
