@@ -2,12 +2,11 @@ package com.keiranhaas.getyourlifeback.steps
 
 import android.Manifest
 import android.app.Activity
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.content.Intent
 import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,198 +21,153 @@ import androidx.core.content.ContextCompat
 import com.keiranhaas.getyourlifeback.data.StepChallenge
 import com.keiranhaas.getyourlifeback.data.StepChallengeStore
 import com.keiranhaas.getyourlifeback.ui.LifeBackTheme
-import com.keiranhaas.getyourlifeback.widget.FocusWidget
-import androidx.glance.appwidget.updateAll
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.keiranhaas.getyourlifeback.util.goHome
 
-class StepChallengeActivity : ComponentActivity(), SensorEventListener {
+class StepChallengeActivity : ComponentActivity() {
 
-    private lateinit var sensorManager: SensorManager
-    private var stepSensor: Sensor? = null
-
-    private var sensorReady by mutableStateOf(false)
-    private var sensorUnavailable by mutableStateOf(false)
     private var permissionMissing by mutableStateOf(false)
-    private var sensorTotal by mutableIntStateOf(0)
+    private var sensorUnavailable by mutableStateOf(false)
     private var challenge by mutableStateOf<StepChallenge?>(null)
-		private var awaitingBaseline = false
+
+    // True once this screen has shown a running challenge, so a finished
+    // one is only reported to the screen that was watching it.
+    private var watching = false
+    private var handledCompletion = false
 
     private val targetPackage: String
         get() = intent.getStringExtra("target_package").orEmpty()
+
+    // SharedPreferences keeps only a weak reference, so hold it in a field.
+    private val prefListener =
+        SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> reload() }
 
     private val permissionRequest =
         registerForActivityResult(
             ActivityResultContracts.RequestPermission()
         ) { granted ->
             permissionMissing = !granted
-            if (granted) prepareSensor()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
-        stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+        val sensors = getSystemService(SENSOR_SERVICE) as SensorManager
+        sensorUnavailable =
+            sensors.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) == null
+        permissionMissing = !hasActivityPermission()
 
         setContent {
             LifeBackTheme {
                 StepChallengeScreen(
-                    target = StepChallengeStore.target(this),
+                    target = challenge?.target ?: StepChallengeStore.target(this),
                     challenge = challenge,
-                    sensorReady = sensorReady,
                     sensorUnavailable = sensorUnavailable,
                     permissionMissing = permissionMissing,
-                    onRequestPermission = { requestActivityPermission() },
-                    onStart = { startChallenge() },
-                    onCancel = {
-                        StepChallengeStore.finish(this)
-                        setResult(Activity.RESULT_CANCELED)
-                        finish()
-                    }
+                    onRequestPermission = {
+                        permissionRequest.launch(
+                            Manifest.permission.ACTIVITY_RECOGNITION
+                        )
+                    },
+                    onStart = { beginChallenge() },
+                    onCancel = { cancelOrClose() }
                 )
             }
         }
-
-        if (hasActivityPermission()) {
-            prepareSensor()
-        } else {
-            permissionMissing = true
-        }
     }
 
-    private fun hasActivityPermission(): Boolean {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACTIVITY_RECOGNITION
-            ) == PackageManager.PERMISSION_GRANTED
+    override fun onStart() {
+        super.onStart()
+        visible = true
+        StepChallengeStore.registerListener(this, prefListener)
+        reload()
     }
-
-    private fun requestActivityPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            permissionRequest.launch(Manifest.permission.ACTIVITY_RECOGNITION)
-        } else {
-            prepareSensor()
-        }
-    }
-
-    private fun prepareSensor() {
-        permissionMissing = false
-        val sensor = stepSensor
-
-        if (sensor == null) {
-            sensorUnavailable = true
-            sensorReady = false
-            return
-        }
-
-        sensorUnavailable = false
-        sensorReady = true
-    }
-
-    private fun startChallenge() {
-	    if (!hasActivityPermission()) {
-	        requestActivityPermission()
-	        return
-	    }
-	
-	    val sensor = stepSensor
-	    if (sensor == null) {
-	        sensorUnavailable = true
-	        return
-	    }
-	
-	    awaitingBaseline = true
-	    challenge = null
-	
-	    if (!sensorManager.registerListener(
-	            this, sensor, SensorManager.SENSOR_DELAY_NORMAL
-	        )
-	    ) {
-	        awaitingBaseline = false
-	        sensorUnavailable = true
-	    }
-	}
 
     override fun onResume() {
         super.onResume()
-        if (hasActivityPermission()) prepareSensor()
+        permissionMissing = !hasActivityPermission()
     }
 
-    override fun onPause() {
-        sensorManager.unregisterListener(this)
-        super.onPause()
+    override fun onStop() {
+        visible = false
+        StepChallengeStore.unregisterListener(this, prefListener)
+        super.onStop()
     }
 
-    override fun onSensorChanged(event: SensorEvent?) {
-	    if (event?.sensor?.type != Sensor.TYPE_STEP_COUNTER) return
-	
-	    val total = event.values.firstOrNull()?.toInt() ?: return
-	    sensorTotal = total
-	
-	    if (awaitingBaseline) {
-	        awaitingBaseline = false
-	        StepChallengeStore.start(this, total)
-	        challenge = StepChallengeStore.update(this, total)
-	        return
-	    }
-	
-	    if (!StepChallengeStore.isActive(this)) return
-	
-	    challenge = StepChallengeStore.update(this, total)
+    private fun hasActivityPermission() =
+        ContextCompat.checkSelfPermission(
+            this, Manifest.permission.ACTIVITY_RECOGNITION
+        ) == PackageManager.PERMISSION_GRANTED
 
-			CoroutineScope(Dispatchers.Default).launch {
-			    FocusWidget().updateAll(applicationContext)
-			}
-	
-	    if (challenge?.completed == true) {
-	        sensorManager.unregisterListener(this)
-	        unlockTargetApp()
-	    }
-	}
+    private fun beginChallenge() {
+        if (!hasActivityPermission()) {
+            permissionRequest.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+            return
+        }
+        watching = true
+        handledCompletion = false
+        StepChallengeStore.start(this, targetPackage)
+        StepTrackingService.start(this)
+        reload()
+    }
 
-	private fun unlockTargetApp() {
-	    val pkg = targetPackage
-	
-	    if (pkg.isNotBlank()) {
-	        val allowance = getSharedPreferences(
-	            "lifeback_settings", MODE_PRIVATE
-	        )
-	
-	        val minutes = com.keiranhaas.getyourlifeback.data
-	            .LifeBackPreferences.sessionMinutes(this)
-	
-	        allowance.edit()
-	            .putLong(
-	                "allowed_until_$pkg",
-	                System.currentTimeMillis() + minutes * 60_000L
-	            )
-	            .apply()
-	
-	        com.keiranhaas.getyourlifeback.data.LifeBackPreferences
-	            .setSessionStart(this, pkg, System.currentTimeMillis())
-	
-	        val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
-	        if (launchIntent != null) {
-	            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-	            startActivity(launchIntent)
-	        }
-	    }
-	
-	    setResult(Activity.RESULT_OK)
-	    finish()
-	}
+    private fun reload() {
+        val stored = StepChallengeStore.targetPackage(this)
+        val sameTarget = targetPackage.isBlank() || targetPackage == stored
+        val active = StepChallengeStore.isActive(this) && sameTarget
 
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        if (active) {
+            watching = true
+            challenge = StepChallengeStore.snapshot(this)
+        } else if (watching) {
+            val snap = StepChallengeStore.snapshot(this)
+            challenge = snap
+            if (snap.completed) onCompleted()
+        } else {
+            challenge = null
+        }
+    }
+
+    private fun onCompleted() {
+        if (handledCompletion) return
+        handledCompletion = true
+
+        val pkg = StepChallengeStore.targetPackage(this)
+        if (pkg.isBlank()) return // started from the Focus tab; stay on "complete"
+
+        // AppBlockingService turns the earned unlock into an allowed
+        // session when this app comes to the foreground.
+        packageManager.getLaunchIntentForPackage(pkg)?.let {
+            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(it)
+        }
+        setResult(Activity.RESULT_OK)
+        finish()
+    }
+
+    private fun cancelOrClose() {
+        val done = challenge?.completed == true
+        if (!done) {
+            StepChallengeStore.finish(this)
+            StepTrackingService.stop(this)
+            setResult(Activity.RESULT_CANCELED)
+        }
+        // Cancelling a challenge that was blocking an app sends the user
+        // home instead of back into the blocked app.
+        if (!done && targetPackage.isNotBlank()) goHome()
+        finish()
+    }
+
+    companion object {
+        @Volatile
+        var visible = false
+            private set
+    }
 }
 
 @Composable
 private fun StepChallengeScreen(
     target: Int,
     challenge: StepChallenge?,
-    sensorReady: Boolean,
     sensorUnavailable: Boolean,
     permissionMissing: Boolean,
     onRequestPermission: () -> Unit,
@@ -238,25 +192,6 @@ private fun StepChallengeScreen(
         Spacer(Modifier.height(28.dp))
 
         when {
-            permissionMissing -> {
-                Text("LifeBack needs permission to recognize physical activity.")
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = onRequestPermission) {
-                    Text("Grant activity permission")
-                }
-            }
-
-            sensorUnavailable -> {
-                Text(
-                    "This device does not expose a compatible step-counter sensor. " +
-                        "Try a supported step data source instead."
-                )
-            }
-
-            !sensorReady -> {
-                Text("Preparing step counter…")
-            }
-
             challenge != null -> {
                 Text(
                     "${challenge.current} / ${challenge.target}",
@@ -269,8 +204,26 @@ private fun StepChallengeScreen(
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    if (challenge.completed) "Challenge complete!"
-                    else "${challenge.remaining} steps to go"
+                    when {
+                        challenge.completed -> "Challenge complete!"
+                        challenge.baseline < 0 -> "Waiting for the first step reading…"
+                        else -> "${challenge.remaining} steps to go"
+                    }
+                )
+            }
+
+            permissionMissing -> {
+                Text("LifeBack needs permission to recognize physical activity.")
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = onRequestPermission) {
+                    Text("Grant activity permission")
+                }
+            }
+
+            sensorUnavailable -> {
+                Text(
+                    "This device does not expose a compatible step-counter sensor. " +
+                        "Try a different challenge type instead."
                 )
             }
 
@@ -285,13 +238,14 @@ private fun StepChallengeScreen(
 
         Spacer(Modifier.height(24.dp))
         OutlinedButton(onClick = onCancel) {
-            Text("Cancel")
+            Text(if (challenge?.completed == true) "Done" else "Cancel")
         }
 
         Spacer(Modifier.height(16.dp))
         Text(
-            "Keep LifeBack open while walking. Step counting pauses when " +
-                "the challenge screen is not active.",
+            "You can leave LifeBack or turn off the screen. Your steps keep " +
+                "counting in the background and you'll get a notification when " +
+                "you're done.",
             style = MaterialTheme.typography.bodySmall
         )
     }
