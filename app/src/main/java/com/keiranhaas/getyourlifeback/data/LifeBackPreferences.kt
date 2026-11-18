@@ -113,4 +113,16 @@ object LifeBackPreferences {
     fun clearSession(context: Context, packageName: String) {
         prefs(context).edit().remove("session_$packageName").apply()
     }
+
+    fun grantAllowance(
+        context: Context,
+        packageName: String,
+        minutes: Int = sessionMinutes(context)
+    ) {
+        val now = System.currentTimeMillis()
+        prefs(context).edit()
+            .putLong("allowed_until_$packageName", now + minutes * 60_000L)
+            .putLong("session_$packageName", now)
+            .apply()
+    }
 }
