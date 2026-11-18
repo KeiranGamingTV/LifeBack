@@ -6,6 +6,7 @@ import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import com.keiranhaas.getyourlifeback.data.LifeBackPreferences
 import java.util.Calendar
+import com.keiranhaas.getyourlifeback.data.StepChallengeStore
 
 class AppBlockingService : AccessibilityService() {
 
@@ -18,7 +19,14 @@ class AppBlockingService : AccessibilityService() {
         }
 
         val pkg = event.packageName?.toString() ?: return
-        if (pkg == packageName || pkg == lastPackage) return
+
+        // Any LifeBack screen (pause, challenge) resets the de-dupe, so
+        // returning to a blocked app is evaluated again.
+        if (pkg == packageName) {
+            lastPackage = ""
+            return
+        }
+        if (pkg == lastPackage) return
 
         lastPackage = pkg
 
@@ -29,10 +37,18 @@ class AppBlockingService : AccessibilityService() {
         if (now - lastInterception < 1200L) return
 
         val prefs = getSharedPreferences("lifeback_settings", MODE_PRIVATE)
-        val allowedUntil = prefs.getLong("allowed_until_$pkg", 0L)
 
         val offHours = LifeBackPreferences.offHoursEnabled(this) &&
             isWithinOffHours()
+
+        // A completed step challenge earns one allowed session, which
+        // starts now, when the app is actually opened.
+        if (!offHours && StepChallengeStore.consumeUnlock(this, pkg)) {
+            LifeBackPreferences.grantAllowance(this, pkg)
+            return
+        }
+
+        val allowedUntil = prefs.getLong("allowed_until_$pkg", 0L)
 
         val sessionStart = LifeBackPreferences.sessionStart(this, pkg)
         val maxMillis = LifeBackPreferences.sessionMinutes(this) * 60_000L
